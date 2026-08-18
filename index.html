@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>深海钓鱼·图鉴收集</title>
+<script src="phaser.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;background:#001a33;
+  font-family:system-ui,-apple-system,sans-serif;color:#fff;
+  touch-action:none;}
+#game{display:block;width:100%;height:100%;}
+#hud{
+  position:fixed;top:0;left:0;right:0;
+  display:flex;justify-content:space-between;align-items:center;
+  padding:12px 16px;z-index:10;
+  background:linear-gradient(to bottom,rgba(0,10,30,0.8),transparent);
+  pointer-events:none;
+}
+#hud>*{pointer-events:auto;}
+.stat{display:flex;align-items:center;gap:4px;font-size:15px;color:#7fd0ff;}
+.stat b{color:#fff;font-size:20px;font-weight:800;}
+.btn{
+  background:linear-gradient(135deg,#4f8cff,#7fd0ff);
+  color:#04122b;border:0;border-radius:8px;padding:8px 16px;
+  font-weight:800;cursor:pointer;font-size:13px;
+  box-shadow:0 4px 12px rgba(79,140,255,0.3);
+}
+.btn:active{transform:scale(0.95);}
+#depth-bar{
+  position:fixed;right:12px;top:50%;transform:translateY(-50%);
+  width:24px;height:200px;background:rgba(0,10,30,0.7);
+  border-radius:12px;border:1px solid rgba(255,255,255,0.1);
+  overflow:hidden;pointer-events:none;
+}
+#depth-fill{
+  position:absolute;bottom:0;left:0;right:0;
+  background:linear-gradient(to top,#003366,#4f8cff);
+  transition:height 0.3s;pointer-events:none;
+}
+#depth-label{
+  position:fixed;right:44px;top:50%;transform:translateY(-50%);
+  font-size:12px;color:#7fd0ff;pointer-events:none;
+}
+#power-bar{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:80px;width:160px;height:16px;background:rgba(0,10,30,0.7);
+  border-radius:8px;border:1px solid rgba(255,255,255,0.1);
+  overflow:hidden;pointer-events:none;
+}
+#power-fill{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,#ff6b6b,#ffd36b,#7fff9f);
+  transition:width 0.05s;pointer-events:none;
+}
+#power-label{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:64px;font-size:12px;color:#7fd0ff;pointer-events:none;
+}
+.panel{
+  position:fixed;inset:0;display:none;flex-direction:column;
+  align-items:center;padding:20px;background:rgba(5,8,18,0.95);z-index:50;
+  overflow-y:auto;
+}
+.panel.open{display:flex;}
+.panel h2{color:#7fd0ff;margin-bottom:16px;font-size:22px;}
+#collection-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));
+  gap:8px;max-width:500px;width:100%;
+}
+.fish-card{
+  aspect-ratio:1;border-radius:8px;display:flex;
+  flex-direction:column;align-items:center;justify-content:center;
+  font-size:11px;color:#fff;cursor:pointer;
+  border:2px solid transparent;transition:all 0.2s;
+}
+.fish-card:hover{transform:scale(1.1);}
+.fish-card.common{background:linear-gradient(135deg,#0a2a0a,#1a4a1a);border-color:#7fff9f;}
+.fish-card.rare{background:linear-gradient(135deg,#0a1a3a,#1a2a5a);border-color:#7fd0ff;}
+.fish-card.legendary{background:linear-gradient(135deg,#2a0a2a,#4a1a4a);border-color:#ffd36b;}
+.fish-card.locked{opacity:0.3;}
+.fish-icon{
+  width:26px;height:26px;border-radius:50%;margin-bottom:4px;
+  border:2px solid rgba(255,255,255,0.6);
+}
+.fish-depth{font-size:10px;color:#8fa8c8;}
+#upgrade-list{
+  display:flex;flex-direction:column;gap:8px;
+  max-width:380px;width:100%;
+}
+.upgrade-item{
+  background:rgba(255,255,255,0.05);border-radius:10px;padding:12px;
+  display:flex;justify-content:space-between;align-items:center;
+  border:1px solid rgba(255,255,255,0.1);
+}
+.upgrade-info{flex:1;}
+.upgrade-name{color:#fff;font-weight:700;font-size:14px;}
+.upgrade-desc{color:#7fd0ff;font-size:11px;margin-top:2px;}
+.upgrade-level{color:#ffd36b;font-size:11px;}
+#hint{
+  position:fixed;bottom:100px;left:50%;transform:translateX(-50%);
+  font-size:14px;color:#7fd0ff;text-align:center;
+  animation:pulse 2s infinite;pointer-events:none;
+}
+@keyframes pulse{0%,100%{opacity:0.5;}50%{opacity:1;}}
+#rotate{
+  position:fixed;inset:0;display:none;align-items:center;
+  justify-content:center;background:rgba(5,8,18,0.95);z-index:100;
+  font-size:18px;text-align:center;padding:20px;
+}
+@media (orientation:landscape) and (pointer:coarse){#rotate{display:flex;}}
+</style>
+</head>
+<body>
+<div id="game"></div>
+
+<div id="hud">
+  <div class="stat">🐟 <b id="fish-count">0</b></div>
+  <div class="stat">💰 <b id="money">100</b></div>
+  <button class="btn" id="collection-btn">图鉴</button>
+  <button class="btn" id="upgrade-btn">升级</button>
+</div>
+
+<div id="depth-bar"><div id="depth-fill"></div></div>
+<div id="depth-label">深度</div>
+
+<div id="power-bar"><div id="power-fill"></div></div>
+<div id="power-label">蓄力</div>
+
+<div id="hint">点击屏幕抛竿钓鱼</div>
+
+<div id="rotate">📱 请竖屏游玩</div>
+
+<div id="collection-panel" class="panel">
+  <h2>📖 鱼类图鉴 (<span id="collected-count">0</span>/50)</h2>
+  <div id="collection-grid"></div>
+  <button class="btn" id="close-collection" style="margin-top:16px">关闭</button>
+</div>
+
+<div id="upgrade-panel" class="panel">
+  <h2>⚙️ 渔具升级</h2>
+  <div id="upgrade-list"></div>
+  <button class="btn" id="close-upgrade" style="margin-top:16px">关闭</button>
+</div>
+
+<script>
+// ===== 音效系统（WebAudio 程序化，无需素材）=====
+const SFX = (() => {
+  let ctx = null, master = null, enabled = true;
+  let bgmTimer = null, ambTimer = null, bgmIdx = 0;
+  const bgmMelody = [262, 330, 392, 523, 392, 330, 294, 349, 440, 349, 294, 262];
+
+  function ensure() {
+    if (!ctx) {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      master = ctx.createGain();
+      master.gain.value = 0.5;
+      master.connect(ctx.destination);
+      // 背景音乐：每 2 秒一个低音 pad 音符（宁静海底氛围）
+      bgmTimer = setInterval(() => {
+        if (!ctx || ctx.state !== 'running' || !enabled) return;
+        const f = bgmMelody[bgmIdx % bgmMelody.length];
+        tone(f * 0.5, 1.9, 'sine', 0.05);
+        if (bgmIdx % 4 === 0) tone(f, 0.6, 'triangle', 0.035);
+        bgmIdx++;
+      }, 2000);
+      // 环境气泡声：每 6 秒一个
+      ambTimer = setInterval(() => {
+        if (!ctx || ctx.state !== 'running' || !enabled) return;
+        bubble();
+      }, 6000);
+    }
+    if (ctx.state === 'suspended') ctx.resume();
+  }
+
+  function tone(freq, dur, type, vol, when, slideTo) {
+    if (!ctx) return;
+    const t0 = ctx.currentTime + (when || 0);
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    if (slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(vol || 0.3, t0 + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g); g.connect(master);
+    osc.start(t0); osc.stop(t0 + dur + 0.05);
+  }
+
+  function bubble() {
+    if (!ctx) return;
+    const f = 300 + Math.random() * 500;
+    tone(f, 0.2, 'sine', 0.06, 0, f * 2.2);
+  }
+
+  function noise(dur, vol, filterFreq) {
+    if (!ctx) return;
+    const t0 = ctx.currentTime;
+    const size = Math.max(1, Math.floor(ctx.sampleRate * dur));
+    const buffer = ctx.createBuffer(1, size, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < size; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / size);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass'; filter.frequency.value = filterFreq || 900;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol || 0.25, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(filter); filter.connect(g); g.connect(master);
+    src.start(t0);
+  }
+
+  const sounds = {
+    splash() { noise(0.25, 0.2, 800); tone(320, 0.2, 'sine', 0.12, 0, 180); },
+    hook() { tone(880, 0.1, 'triangle', 0.25); tone(1320, 0.14, 'triangle', 0.2, 0.07); },
+    catch() { tone(660, 0.12, 'square', 0.15); tone(990, 0.18, 'square', 0.15, 0.09); },
+    success() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.18, 'triangle', 0.22, i * 0.09)); },
+    fail() { tone(400, 0.3, 'sawtooth', 0.12, 0, 250); tone(200, 0.4, 'sawtooth', 0.1, 0.12, 120); },
+    newFish() { tone(784, 0.18, 'triangle', 0.28); tone(1175, 0.32, 'triangle', 0.28, 0.12); },
+    coin() { tone(1319, 0.08, 'square', 0.16); tone(1760, 0.14, 'square', 0.16, 0.06); },
+    click() { tone(640, 0.05, 'sine', 0.08); },
+  };
+
+  return {
+    unlock() { ensure(); },
+    play(name) {
+      ensure();
+      if (!ctx || ctx.state !== 'running' || !enabled) return;
+      if (sounds[name]) sounds[name]();
+    },
+    toggle() {
+      enabled = !enabled;
+      if (master) master.gain.value = enabled ? 0.5 : 0;
+      return enabled;
+    },
+  };
+})();
+
+// ===== 游戏数据 =====
+const FISH_DATA = [
+  // 浅海 common（0-30m）
+  {id:0, name:'小丑鱼', rarity:'common', depth:5, color:'#ff9f5f'},
+  {id:1, name:'河豚', rarity:'common', depth:8, color:'#7fff9f'},
+  {id:2, name:'海马', rarity:'common', depth:10, color:'#7fd0ff'},
+  {id:3, name:'蝴蝶鱼', rarity:'common', depth:12, color:'#ffd36b'},
+  {id:4, name:'黄尾鲷', rarity:'common', depth:15, color:'#ffe58a'},
+  {id:5, name:'蓝纹鲷', rarity:'common', depth:18, color:'#7fd0ff'},
+  {id:6, name:'沙丁鱼', rarity:'common', depth:20, color:'#9fb8c9'},
+  {id:7, name:'凤尾鱼', rarity:'common', depth:22, color:'#a8c9d9'},
+  {id:8, name:'鲳鱼', rarity:'common', depth:25, color:'#cfd8e3'},
+  {id:9, name:'比目鱼', rarity:'common', depth:28, color:'#b8a88f'},
+  {id:10, name:'海鳗', rarity:'common', depth:30, color:'#8fa8b8'},
+  {id:11, name:'狮子鱼', rarity:'common', depth:30, color:'#ff8fbf'},
+  {id:12, name:'刺豚', rarity:'common', depth:32, color:'#9fffcf'},
+  {id:13, name:'金枪鱼', rarity:'common', depth:35, color:'#7f9fff'},
+  {id:14, name:'鲭鱼', rarity:'common', depth:38, color:'#6fbfdf'},
+  {id:15, name:'带鱼', rarity:'common', depth:40, color:'#cfd8e3'},
+  {id:16, name:'秋刀鱼', rarity:'common', depth:42, color:'#b8cf8f'},
+  {id:17, name:'鹦嘴鱼', rarity:'common', depth:45, color:'#7fffd0'},
+  {id:18, name:'鲻鱼', rarity:'common', depth:48, color:'#9fc8bf'},
+  {id:19, name:'青衣', rarity:'common', depth:50, color:'#8fd0ff'},
+  // 中层 rare（50-120m）
+  {id:20, name:'灯笼鱼', rarity:'rare', depth:55, color:'#8f8fff'},
+  {id:21, name:'鮟鱇鱼', rarity:'rare', depth:60, color:'#9f7fd0'},
+  {id:22, name:'水母', rarity:'rare', depth:65, color:'#cf7ff0'},
+  {id:23, name:'乌贼', rarity:'rare', depth:70, color:'#bf9fff'},
+  {id:24, name:'章鱼', rarity:'rare', depth:75, color:'#df8f9f'},
+  {id:25, name:'龙虾', rarity:'rare', depth:80, color:'#ff8f6f'},
+  {id:26, name:'海龟', rarity:'rare', depth:85, color:'#7fb88f'},
+  {id:27, name:'梭鱼', rarity:'rare', depth:90, color:'#8fd0e8'},
+  {id:28, name:'剑鱼', rarity:'rare', depth:95, color:'#9fb8e8'},
+  {id:29, name:'旗鱼', rarity:'rare', depth:100, color:'#6f8fd0'},
+  {id:30, name:'石斑鱼', rarity:'rare', depth:100, color:'#cfb88f'},
+  {id:31, name:'东星斑', rarity:'rare', depth:105, color:'#ff8f8f'},
+  {id:32, name:'魔鬼鱼', rarity:'rare', depth:110, color:'#8f8fe8'},
+  {id:33, name:'蝙蝠鱼', rarity:'rare', depth:115, color:'#9f9fd0'},
+  {id:34, name:'小飞象章鱼', rarity:'rare', depth:120, color:'#ff9ff0'},
+  {id:35, name:'海狼', rarity:'rare', depth:90, color:'#8fb8d0'},
+  {id:36, name:'红鲷', rarity:'rare', depth:95, color:'#ff7f7f'},
+  {id:37, name:'黑鲈', rarity:'rare', depth:100, color:'#7f8fa0'},
+  {id:38, name:'鳐鱼', rarity:'rare', depth:110, color:'#afafd0'},
+  {id:39, name:'大眼鲷', rarity:'rare', depth:120, color:'#d0d07f'},
+  // 深海 legendary（150-200m）
+  {id:40, name:'巨鲸鲨', rarity:'legendary', depth:150, color:'#ffd36b'},
+  {id:41, name:'大王乌贼', rarity:'legendary', depth:155, color:'#d08f4f'},
+  {id:42, name:'皇带鱼', rarity:'legendary', depth:160, color:'#e8c8a0'},
+  {id:43, name:'蓝环章鱼', rarity:'legendary', depth:165, color:'#7fc0ff'},
+  {id:44, name:'幽灵鲨', rarity:'legendary', depth:170, color:'#cfcfe8'},
+  {id:45, name:'深海鮟鱇', rarity:'legendary', depth:175, color:'#bf8fff'},
+  {id:46, name:'灯塔水母', rarity:'legendary', depth:180, color:'#8ffff0'},
+  {id:47, name:'深海龙鱼', rarity:'legendary', depth:185, color:'#7fff8f'},
+  {id:48, name:'巨型石斑', rarity:'legendary', depth:190, color:'#ffb86f'},
+  {id:49, name:'海神鲸', rarity:'legendary', depth:200, color:'#ff8f3f'},
+];
+
+const UPGRADES = [
+  {key:'rod', name:'钓竿', desc:'落钩更快', baseCost:50},
+  {key:'line', name:'鱼线', desc:'解锁深水鱼（Lv2稀有/Lv4传说）', baseCost:60},
+  {key:'hook', name:'鱼钩', desc:'提升稀有鱼概率', baseCost:80},
+  {key:'reel', name:'卷线器', desc:'收线更快', baseCost:100},
+  {key:'sonar', name:'声呐', desc:'鱼群更亮可见', baseCost:120},
+  {key:'bait', name:'鱼饵', desc:'鱼群更多', baseCost:40},
+];
+
+// ===== 游戏状态 =====
+const state = {
+  money: 100,
+  fishCaught: [],
+  upgrades: {rod:1,line:1,hook:1,reel:1,sonar:0,bait:0},
+  depth: 0,
+  power: 0,
+  fishing: false,
+  hooked: false,
+};
+
+// ===== Phaser 场景 =====
+class FishingScene extends Phaser.Scene {
+  constructor() { super('FishingScene'); }
+
+  preload() {
+    const g = this.make.graphics({x:0,y:0,add:false});
+    // 鱼纹理：描边垫底 + 身体 + 尾鳍 + 眼睛（朝向右侧）
+    g.clear();
+    g.fillStyle(0x000000, 0.5);
+    g.fillEllipse(20, 21, 30, 18);
+    g.fillTriangle(32, 20, 44, 10, 44, 30);
+    g.fillStyle(0xffffff, 1);
+    g.fillEllipse(20, 20, 26, 14);
+    g.fillTriangle(30, 19, 40, 11, 40, 27);
+    // 背鳍
+    g.fillTriangle(16, 13, 26, 13, 21, 5);
+    // 眼睛
+    g.fillStyle(0x111111, 1);
+    g.fillCircle(12, 16, 3);
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(11, 15, 1.2);
+    g.generateTexture('fish', 46, 34);
+    
+    // 气泡
+    g.clear(); g.fillStyle(0xffffff,0.4); g.fillCircle(4,4,4);
+    g.generateTexture('bubble', 8, 8);
+    
+    // 钩子
+    g.clear(); g.fillStyle(0xffffff,1); g.fillCircle(4,4,4);
+    g.generateTexture('hook', 8, 8);
+    
+    // 光效
+    g.clear(); g.fillStyle(0x4f8cff,0.6); g.fillCircle(16,16,16);
+    g.generateTexture('glow', 32, 32);
+  }
+
+  create() {
+    this.scale.on('resize', this.resize, this);
+    this.resize(this.scale.width, this.scale.height);
+    
+    // 背景渐变
+    this.bgGraphics = this.add.graphics();
+    this.updateBackground();
+    this.time.addEvent({delay:1000, callback:this.updateBackground, callbackScope:this, loop:true});
+    
+    // 鱼群和气泡
+    this.fishGroup = this.add.group();
+    this.bubbleGroup = this.add.group();
+    
+    for (let i = 0; i < 15; i++) this.spawnFish();
+    for (let i = 0; i < 20; i++) this.spawnBubble();
+    
+    // 钩子
+    this.hook = this.add.image(this.scale.width/2, this.scale.height*0.5, 'hook').setVisible(false);
+    
+    // 光效
+    this.lightGroup = this.add.group();
+    for (let i = 0; i < 8; i++) this.spawnLight();
+    
+    // 点击钓鱼 + 收线（一次性注册，避免重复监听累积）
+    this.input.on('pointerdown', this.onInputDown, this);
+    this.input.on('pointerup', this.onReelUp, this);
+    this.input.on('pointercancel', this.onReelUp, this);
+    // 首次交互解锁音频（浏览器自动播放限制）
+    this.input.once('pointerdown', () => SFX.unlock());
+    
+    // 定时生成
+    // 定时生成鱼群（bait 等级 → 生成更快、鱼更多）
+    const spawnDelay = Math.max(500, 1500 - state.upgrades.bait * 120);
+    this.time.addEvent({delay:spawnDelay, callback:this.spawnFish, callbackScope:this, loop:true});
+    this.time.addEvent({delay:800, callback:this.spawnBubble, callbackScope:this, loop:true});
+    
+    // 更新 UI
+    this.updateUI();
+  }
+
+  resize(width, height) {
+    this.cameras.main.setBounds(0, 0, width, height);
+  }
+
+  updateBackground() {
+    const w = this.scale.width, h = this.scale.height;
+    this.bgGraphics.clear();
+    this.bgGraphics.fillGradientStyle(0x001a33, 0x001a33, 0x003366, 0x004488, 1);
+    this.bgGraphics.fillRect(0, 0, w, h);
+  }
+
+  spawnFish() {
+    const w = this.scale.width, h = this.scale.height;
+    const fish = this.fishGroup.create(
+      Phaser.Math.Between(w*0.1, w*0.9),
+      Phaser.Math.Between(h*0.2, h*0.85),
+      'fish'
+    );
+    // 随机鱼色（按深浅分层）
+    const fishData = FISH_DATA[Phaser.Math.Between(0, 49)];
+    const color = Phaser.Display.Color.HexStringToColor(fishData.color).color;
+    fish.setTint(color);
+    // sonar 升级：鱼更亮可见
+    const baseAlpha = state.upgrades.sonar >= 1 ? 0.95 : 0.85;
+    fish.setAlpha(Phaser.Math.FloatBetween(baseAlpha, 1));
+    fish.setScale(Phaser.Math.FloatBetween(1.2, 2.4));
+    fish.speedX = Phaser.Math.Between(-40, 40);
+    fish.speedY = 0;
+    fish.directionChangeTime = this.time.now + Phaser.Math.Between(1000, 3000);
+  }
+
+  spawnBubble() {
+    const w = this.scale.width;
+    const bubble = this.bubbleGroup.create(
+      Phaser.Math.Between(0, w),
+      this.scale.height + 10,
+      'bubble'
+    );
+    bubble.setAlpha(Phaser.Math.FloatBetween(0.2, 0.5));
+    bubble.setScale(Phaser.Math.FloatBetween(0.5, 1.5));
+    bubble.velocityX = Phaser.Math.Between(-15, 15);
+    bubble.velocityY = -Phaser.Math.Between(40, 80);
+    this.time.delayedCall(4000, () => bubble.destroy());
+  }
+
+  spawnLight() {
+    const w = this.scale.width, h = this.scale.height;
+    const light = this.lightGroup.create(
+      Phaser.Math.Between(w*0.2, w*0.8),
+      Phaser.Math.Between(h*0.3, h*0.8),
+      'glow'
+    );
+    light.setScale(Phaser.Math.FloatBetween(0.8, 1.5));
+    light.setAlpha(0.3);
+    this.tweens.add({
+      targets: light,
+      alpha: 0.6, scale: light.scaleX * 1.1,
+      duration: Phaser.Math.Between(2000, 4000),
+      yoyo: true, repeat: -1,
+    });
+  }
+
+  onInputDown(pointer) {
+    if (!state.fishing && !state.hooked) {
+      this.startFishing(pointer);
+    } else if (state.hooked) {
+      this.onReelDown();
+    }
+  }
+
+  startFishing(pointer) {
+    if (state.fishing || state.hooked) return;
+    
+    state.fishing = true;
+    state.power = 0;
+    
+    SFX.play('splash');
+    this.hook.setPosition(pointer.x, pointer.y).setVisible(true);
+    
+    const targetY = Phaser.Math.Between(this.scale.height * 0.5, this.scale.height * 0.85);
+    const rodSpeed = Math.max(400, 800 - state.upgrades.rod * 60); // 钓竿等级 → 落钩更快
+    this.tweens.add({
+      targets: this.hook,
+      y: targetY,
+      duration: rodSpeed,
+      ease: 'Linear',
+      onComplete: () => {
+        if (this.checkCatch()) {
+          this.beginReeling();
+        } else {
+          state.fishing = false;
+          this.hook.setVisible(false);
+          document.getElementById('hint').textContent = '点击屏幕抛竿钓鱼';
+        }
+      }
+    });
+    
+    document.getElementById('hint').textContent = '';
+  }
+
+  checkCatch() {
+    const hx = this.hook.x, hy = this.hook.y;
+    const children = this.fishGroup.getChildren();
+    
+    for (let i = 0; i < children.length; i++) {
+      const fish = children[i];
+      if (!fish.active) continue;
+      
+      const dx = fish.x - hx;
+      const dy = fish.y - hy;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      
+      if (dist < 30) {
+        this.hookedFish = fish; // 先标记，收线成功才真正入池
+        SFX.play('hook');
+        return true;
+      }
+    }
+    return false;
+  }
+
+  catchFish(fish) {
+    fish.destroy();
+    
+    // 鱼池选择：line 等级解锁深水鱼，hook 等级提升稀有率
+    const line = state.upgrades.line;
+    const hook = state.upgrades.hook;
+    const rareChance = Math.min(0.5, 0.15 + hook * 0.06); // 稀有概率
+    const legendChance = line >= 4 ? Math.min(0.15, 0.02 + hook * 0.02) : 0; // 深海鱼需 line>=4
+    
+    let fishData;
+    const roll = Math.random();
+    if (line >= 2 && roll < legendChance) {
+      // 传说鱼（需 line>=4 由上面保证）
+      fishData = FISH_DATA[40 + Phaser.Math.Between(0, 9)];
+    } else if (line >= 2 && roll < legendChance + rareChance) {
+      // 稀有鱼（需 line>=2）
+      fishData = FISH_DATA[20 + Phaser.Math.Between(0, 19)];
+    } else {
+      // 普通鱼
+      fishData = FISH_DATA[Phaser.Math.Between(0, 19)];
+    }
+    
+    const isNew = !state.fishCaught.includes(fishData.id);
+    state.fishCaught.push(fishData.id);
+    state.money += fishData.rarity === 'legendary' ? 50 : fishData.rarity === 'rare' ? 20 : 10;
+    state.depth = Math.max(state.depth, fishData.depth);
+    
+    SFX.play('catch');
+    // 新鱼提示
+    if (isNew) {
+      SFX.play('newFish');
+      document.getElementById('hint').textContent = `🎣 新发现！${fishData.name} (${fishData.depth}m)`;
+    } else {
+      document.getElementById('hint').textContent = `🐟 钓到 ${fishData.name} +${fishData.rarity === 'legendary' ? 50 : fishData.rarity === 'rare' ? 20 : 10}💰`;
+    }
+    
+    // 闪光效果
+    const flash = this.add.circle(this.hook.x, this.hook.y, 20, 0xffffff, 0.8);
+    this.tweens.add({
+      targets: flash, scale: 3, alpha: 0,
+      duration: 300, onComplete: () => flash.destroy(),
+    });
+    
+    // 震动反馈
+    this.cameras.main.shake(150, 0.005);
+    
+    // 粒子爆发
+    for (let i = 0; i < 8; i++) {
+      const p = this.add.circle(this.hook.x, this.hook.y, 3, fishData.color, 1);
+      this.tweens.add({
+        targets: p,
+        x: this.hook.x + Phaser.Math.Between(-60, 60),
+        y: this.hook.y + Phaser.Math.Between(-60, 60),
+        alpha: 0, duration: 600,
+        onComplete: () => p.destroy(),
+      });
+    }
+    
+    this.updateUI();
+  }
+
+  beginReeling() {
+    state.hooked = true;
+    this.charging = false;
+    this.hook.setVisible(false);
+    document.getElementById('hint').textContent = '按住蓄力，满力收线！(≥20 成功)';
+    // 5 秒内没收线则自动失败
+    this.time.delayedCall(5000, () => {
+      if (state.hooked) this.onReelUp();
+    });
+  }
+
+  onReelDown() {
+    if (!state.hooked) return;
+    this.charging = true;
+    // 点击加力度 + 按住持续充电（在 update 中）
+    const tapBoost = 15 + state.upgrades.reel * 3;
+    state.power = Math.min(100, state.power + tapBoost);
+    this.updatePowerBar();
+  }
+
+  onReelUp() {
+    if (!state.hooked) return;
+    state.hooked = false;
+    this.charging = false;
+    
+    if (state.power >= 20 && this.hookedFish) {
+      // 收线成功：鱼入池 + 上浮动画
+      const hookX = this.scale.width / 2;
+      const retFish = this.add.image(hookX, this.hook.y, 'fish').setScale(2);
+      this.tweens.add({
+        targets: retFish,
+        x: hookX, y: this.scale.height * 0.3,
+        scale: 1, alpha: 0, duration: 500,
+        onComplete: () => retFish.destroy(),
+      });
+      this.catchFish(this.hookedFish);
+      SFX.play('success');
+    } else {
+      // 收线失败：鱼跑了
+      SFX.play('fail');
+      document.getElementById('hint').textContent = '鱼跑了… 再试一次！';
+    }
+    this.hookedFish = null;
+    
+    state.fishing = false;
+    state.power = 0;
+    this.updatePowerBar();
+    document.getElementById('depth-fill').style.height = (state.depth / 200 * 100) + '%';
+  }
+
+  updatePowerBar() {
+    document.getElementById('power-fill').style.width = state.power + '%';
+  }
+
+  update() {
+    // 收线时按住持续充电
+    if (this.charging && state.hooked) {
+      const reelSpeed = 30 + state.upgrades.reel * 10; // 每秒充电量
+      state.power = Math.min(100, state.power + reelSpeed * (this.game.loop.delta / 1000));
+      this.updatePowerBar();
+      if (state.power >= 100) {
+        // 满力自动收线
+        this.charging = false;
+        this.onReelUp();
+      }
+    }
+    
+    if (state.fishing && this.hook.visible) {
+      const w = this.scale.width;
+      this.hook.x = w/2 + Math.sin(Date.now()*0.003) * 20;
+      this.hook.y = this.scale.height * 0.5 + state.power * 2;
+    }
+    
+    // 更新鱼的位置
+    const now = this.time.now;
+    this.fishGroup.getChildren().forEach(fish => {
+      if (fish.active) {
+        fish.x += fish.speedX * (this.game.loop.delta / 1000);
+        
+        // 检查是否需要改变方向
+        if (now > fish.directionChangeTime) {
+          fish.speedX = -fish.speedX;
+          fish.directionChangeTime = now + Phaser.Math.Between(1000, 3000);
+        }
+        
+        // 屏幕边界反弹
+        if (fish.x < 0 || fish.x > this.scale.width) {
+          fish.speedX = -fish.speedX;
+        }
+      }
+    });
+    
+    // 更新气泡位置
+    this.bubbleGroup.getChildren().forEach(bubble => {
+      if (bubble.active) {
+        bubble.y += bubble.velocityY * (this.game.loop.delta / 1000);
+        bubble.x += bubble.velocityX * (this.game.loop.delta / 1000);
+        
+        // 如果气泡飞出屏幕顶部，重置到底部
+        if (bubble.y < -10) {
+          bubble.y = this.scale.height + 10;
+          bubble.x = Phaser.Math.Between(0, this.scale.width);
+        }
+      }
+    });
+  }
+
+  updateUI() {
+    document.getElementById('fish-count').textContent = state.fishCaught.length;
+    document.getElementById('money').textContent = state.money;
+    document.getElementById('depth-fill').style.height = (state.depth / 200 * 100) + '%';
+    document.getElementById('power-fill').style.width = state.power + '%';
+  }
+}
+
+// ===== 启动游戏 =====
+const game = new Phaser.Game({
+  type: Phaser.AUTO,
+  width: window.innerWidth,
+  height: window.innerHeight,
+  backgroundColor: '#001a33',
+  parent: 'game',
+  scale: {
+    mode: Phaser.Scale.RESIZE,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+  },
+  scene: [FishingScene],
+});
+
+// 调试挂载（自动化测试用）
+window.__game = game;
+window.__scene = () => game.scene.getScene('FishingScene');
+window.__state = state;
+
+// ===== UI 事件 =====
+document.getElementById('collection-btn').addEventListener('click', () => {
+  SFX.play('click');
+  const panel = document.getElementById('collection-panel');
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open')) renderCollection();
+});
+document.getElementById('close-collection').addEventListener('click', () => {
+  SFX.play('click');
+  document.getElementById('collection-panel').classList.remove('open');
+});
+document.getElementById('upgrade-btn').addEventListener('click', () => {
+  SFX.play('click');
+  const panel = document.getElementById('upgrade-panel');
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open')) renderUpgrades();
+});
+document.getElementById('close-upgrade').addEventListener('click', () => {
+  SFX.play('click');
+  document.getElementById('upgrade-panel').classList.remove('open');
+});
+
+function renderCollection() {
+  const grid = document.getElementById('collection-grid');
+  grid.innerHTML = '';
+  
+  FISH_DATA.forEach(fish => {
+    const collected = state.fishCaught.includes(fish.id);
+    const card = document.createElement('div');
+    card.className = `fish-card ${fish.rarity} ${collected ? '' : 'locked'}`;
+    const iconColor = collected ? fish.color : '#3a4a5a';
+    const icon = collected
+      ? `<div class="fish-icon" style="background:${fish.color};box-shadow:0 0 8px ${fish.color}"></div>`
+      : `<div class="fish-icon" style="background:#3a4a5a"></div>`;
+    card.innerHTML = `${icon}<div>${collected ? fish.name : '???'}</div><div class="fish-depth">${collected ? fish.depth + 'm' : ''}</div>`;
+    grid.appendChild(card);
+  });
+  
+  document.getElementById('collected-count').textContent = state.fishCaught.length;
+}
+
+function renderUpgrades() {
+  const list = document.getElementById('upgrade-list');
+  list.innerHTML = '';
+  
+  UPGRADES.forEach(upg => {
+    const level = state.upgrades[upg.key];
+    const cost = Math.floor(upg.baseCost * (1 + level * 0.2));
+    const canAfford = state.money >= cost;
+    
+    const item = document.createElement('div');
+    item.className = 'upgrade-item';
+    item.innerHTML = `
+      <div class="upgrade-info">
+        <div class="upgrade-name">${upg.name}</div>
+        <div class="upgrade-desc">${upg.desc}</div>
+        <div class="upgrade-level">Lv.${level}</div>
+      </div>
+      <button class="btn btn-small" ${canAfford ? '' : 'disabled'}>${cost}💰</button>
+    `;
+    
+    item.querySelector('button').addEventListener('click', () => {
+      if (state.money >= cost) {
+        state.money -= cost;
+        state.upgrades[upg.key]++;
+        SFX.play('coin');
+        renderUpgrades();
+        game.scene.getScene('FishingScene')?.updateUI();
+      }
+    });
+    
+    list.appendChild(item);
+  });
+}
+
+// 初始 UI
+document.getElementById('depth-fill').style.height = '0%';
+</script>
+</body>
+</html>
